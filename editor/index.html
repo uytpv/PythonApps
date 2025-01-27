@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI Historic', 'Segoe UI', 'Helvetica', 'Arial', sans-serif;
+        }
+        
+        .editor-container {
+            width: 500px;
+        }
+        
+        .editor {
+            width: 100%;
+            height: 417px;
+            font-size: 12px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            box-sizing: border-box;
+            resize: none;
+        }
+        
+        .preview {
+            margin-top: 20px;
+            font-size: 12px;
+        }
+    </style>
+    <title>Text Editor and Preview</title>
+</head>
+
+<body>
+    <div class="editor-container">
+        <textarea class="editor" id="editor" oninput="updatePreview()"></textarea>
+        <div class="preview" id="preview"></div>
+    </div>
+    <script>
+        const editor = document.getElementById('editor');
+        const preview = document.getElementById('preview');
+
+        function convertToAlternateUnicode(input) {
+            const unicodeMap = {
+                'a': '𝒶',
+                'b': '𝒷',
+                'c': '𝒸',
+                'd': '𝒹',
+                'e': 'ℯ',
+                'f': '𝒻',
+                'g': 'ℊ',
+                'h': '𝒽',
+                'i': '𝒾',
+                'j': '𝒿',
+                'k': '𝓀',
+                'l': '𝓁',
+                'm': '𝓂',
+                'n': '𝓃',
+                'o': 'ℴ',
+                'p': '𝓅',
+                'q': '𝓆',
+                'r': '𝓇',
+                's': '𝓈',
+                't': '𝓉',
+                'u': '𝓊',
+                'ữ': '𝓊̛̃',
+                'v': '𝓋',
+                'w': '𝓌',
+                'x': '𝓍',
+                'y': '𝓎',
+                'z': '𝓏',
+                'A': '𝒜',
+                'B': 'ℬ',
+                'C': '𝒞',
+                'D': '𝒟',
+                'E': 'ℰ',
+                'F': 'ℱ',
+                'G': '𝒢',
+                'H': 'ℋ',
+                'I': 'ℐ',
+                'J': '𝒥',
+                'K': '𝒦',
+                'L': 'ℒ',
+                'M': 'ℳ',
+                'N': '𝒩',
+                'O': '𝒪',
+                'P': '𝒫',
+                'Q': '𝒬',
+                'R': 'ℛ',
+                'S': '𝒮',
+                'T': '𝒯',
+                'U': '𝒰',
+                'V': '𝒱',
+                'W': '𝒲',
+                'X': '𝒳',
+                'Y': '𝒴',
+                'Z': '𝒵',
+                ' ': ' ',
+                ';': ';',
+                ',': ',',
+                '.': '.',
+                "'": "'",
+                '"': '"',
+                '(': '(',
+                ')': ')',
+                '-': '-'
+                    // Add more mappings as needed
+            };
+
+            let output = '';
+            for (let char of input) {
+                output += unicodeMap[char] || char;
+            }
+            return output;
+        }
+
+
+        function updatePreview() {
+            const text = editor.value;
+            const convertedText = convertToAlternateUnicode(text);
+            preview.textContent = convertedText;
+        }
+    </script>
+</body>
+
+</html>

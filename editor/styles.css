@@ -1,0 +1,73 @@
+body {
+    font-family: 'Segoe UI Historic', 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+.editor-container {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+}
+
+.editor-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.format-button {
+    font-size: 12px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.icon-insert-button {
+    font-size: 12px;
+    padding: 5px 10px;
+    cursor: pointer;
+    background-color: #f2f2f2;
+}
+
+.editor-content {
+    height: 417px;
+    border: 1px solid #ccc;
+    padding: 10px;
+    font-size: 12px;
+    overflow: auto;
+}
+
+.icon-popup {
+    position: absolute;
+    display: none;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    padding: 5px;
+}
+
+.icon-button {
+    font-size: 18px;
+    cursor: pointer;
+    margin: 2px;
+}
+
+.copy-button {
+    font-size: 12px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.bold {
+    font-family: 'Segoe UI Historic', 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-weight: bold;
+}
+
+.italic {
+    font-family: 'Segoe UI Historic', 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-style: italic;
+}
+
+.underline {
+    font-family: 'Segoe UI Historic', 'Segoe UI', Helvetica, Arial, sans-serif;
+    text-decoration: underline;
+}
