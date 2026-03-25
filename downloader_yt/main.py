@@ -35,17 +35,53 @@ def download_youtube_video(video_url, output_path='videos', sound=False):
         else:
             ydl_opts = {
                 'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
-                'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]',
-                'merge_output_format': 'mp4',  # Đảm bảo file đầu ra là MP4
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
+                'merge_output_format': 'mp4',
+                'noplaylist': True,
             }
             output_file_ext = '.mp4'
 
-        # Tải video
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            result = ydl.extract_info(video_url, download=True)
-            video_title = result.get('title', 'unknown_title')
-            safe_filename = clean_filename(video_title)
-            output_file_path = os.path.join(output_path, safe_filename + output_file_ext)
+        # Show yt-dlp version
+        try:
+            ytdlp_version = getattr(yt_dlp, '__version__', None)
+            if ytdlp_version:
+                print(f"yt-dlp version: {ytdlp_version}")
+        except Exception:
+            pass
+
+        # Tải video - try primary options, then retry with a simpler format if not available
+        result = None
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                result = ydl.extract_info(video_url, download=True)
+
+
+        except yt_dlp.utils.DownloadError as e:
+            errmsg = str(e)
+            # If we hit a 403 Forbidden, try using cookies from browser
+            if 'HTTP Error 403' in errmsg:
+                print('⚠️ 403 Forbidden detected. Retrying with browser cookies (Chrome)...')
+                cookie_opts = ydl_opts.copy()
+                cookie_opts['cookiesfrombrowser'] = ('chrome', )
+                try:
+                    with yt_dlp.YoutubeDL(cookie_opts) as ydl:
+                        result = ydl.extract_info(video_url, download=True)
+                except Exception as cookie_e:
+                    print(f"❌ Failed even with cookies: {str(cookie_e)}")
+                    raise e # Re-raise original error if cookie attempt fails
+            elif 'Requested format is not available' in errmsg or 'Signature extraction failed' in errmsg or 'has no valid formats' in errmsg:
+                 print('⚠️ Primary format failed, retrying with a more permissive format...')
+                 fallback_opts = ydl_opts.copy()
+                 fallback_opts['format'] = 'bestvideo+bestaudio/best'
+                 with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                     result = ydl.extract_info(video_url, download=True)
+            else:
+                raise
+
+        # Lấy thông tin video sau khi download thành công
+        video_title = result.get('title', 'unknown_title')
+        safe_filename = clean_filename(video_title)
+        output_file_path = os.path.join(output_path, safe_filename + output_file_ext)
 
         # Kiểm tra nếu tệp đã tồn tại
         if os.path.exists(output_file_path):
@@ -135,6 +171,7 @@ def process_url_list(sound):
         print(f"File '{url_list_file}' không tồn tại.")
     except Exception as e:  # Bắt lỗi chung cho toàn bộ quá trình
         print(f"Lỗi trong quá trình xử lý danh sách URL: {e}")
-# Chạy quá trình tải, có thể truyền đối số `sound=True` để chỉ tải âm thanh
-process_url_list ( sound=False )
 
+if __name__ == "__main__":
+    # Chạy quá trình tải, có thể truyền đối số `sound=True` để chỉ tải âm thanh
+    process_url_list(sound=False)
