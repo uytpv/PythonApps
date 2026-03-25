@@ -43,3 +43,7 @@ Thumbs.db
 # Test
 test_videos/
 release/
+
+*.exe
+*.zip
+everything_downloader/release/

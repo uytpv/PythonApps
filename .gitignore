@@ -3,3 +3,8 @@
 **/videos/
 **/audios/*.mp4
 *.mp4
+
+
+*.exe
+*.zip
+everything_downloader/release/
