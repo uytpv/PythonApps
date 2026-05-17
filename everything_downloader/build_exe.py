@@ -31,11 +31,12 @@ def build_exe():
         '--windowed',
         '--add-data=' + os.path.join(script_dir, 'downloader_core.py') + ';.',
         '--add-data=' + os.path.join(script_dir, 'gui.py') + ';.',
+        '--add-data=' + os.path.join(script_dir, 'bin') + ';bin',
         '--collect-all=PyQt6',
         '--collect-all=yt_dlp',
         '--noconfirm',
         f'--distpath={dist_dir}',
-        f'--buildpath={build_dir}',
+        f'--workpath={build_dir}',
         f'--specpath={build_dir}',
     ])
     

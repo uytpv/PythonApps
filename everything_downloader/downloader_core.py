@@ -134,20 +134,42 @@ class DownloaderCore:
             except Exception as e:
                 self.log(f"⚠️ Không thể lấy thông tin video, tiếp tục download...")
             
+            # Kiểm tra xem ffmpeg có tồn tại không
+            import shutil
+            ffmpeg_path = shutil.which('ffmpeg')
+            
+            # Kiểm tra thêm trong thư mục local 'bin' nếu không tìm thấy trong PATH
+            if not ffmpeg_path:
+                local_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg.exe')
+                if os.path.exists(local_bin):
+                    ffmpeg_path = local_bin
+                    self.log(f"✅ Tìm thấy ffmpeg tại: {ffmpeg_path}")
+
             # Cấu hình yt-dlp
             ydl_opts = {
                 'outtmpl': os.path.join(self.output_path, '%(id)s.%(ext)s'),
-                # Ưu tiên 1080p > 720p > 480p
-                'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestvideo[height<=720]+bestaudio/best[height<=720]/best',
-                'merge_output_format': 'mp4',
                 'quiet': False,
-                'no_warnings': False,
+                'no_warnings': True,
                 'socket_timeout': 30,
                 'http_headers': {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 },
                 'logger': self._yt_dlp_logger(),
             }
+
+            if ffmpeg_path:
+                # Nếu tìm thấy ffmpeg, chỉ định vị trí cho yt-dlp (nếu dùng đường dẫn tuyệt đối)
+                if os.path.isabs(ffmpeg_path):
+                    ydl_opts['ffmpeg_location'] = ffmpeg_path
+                
+                # Ưu tiên 1080p > 720p > 480p có merge
+                ydl_opts['format'] = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestvideo[height<=720]+bestaudio/best[height<=720]/best'
+                ydl_opts['merge_output_format'] = 'mp4'
+            else:
+                self.log("⚠️ Không tìm thấy ffmpeg. Chất lượng video sẽ bị giới hạn (tối đa 720p) vì không thể trộn video và âm thanh.")
+                self.log("💡 Bạn có thể bỏ 'ffmpeg.exe' vào thư mục 'bin' trong thư mục dự án để tăng chất lượng lên 1080p+.")
+                # Nếu không có ffmpeg, chỉ tải file đã có sẵn video+audio (thường tối đa 720p cho mp4)
+                ydl_opts['format'] = 'best[ext=mp4]/best'
             
             self.log(f"🔄 Đang tải: {url}")
             
