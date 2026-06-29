@@ -68,13 +68,14 @@ class DownloaderCore:
         
         return filename
     
-    def find_existing_video(self, video_title: str, video_id: str) -> Optional[str]:
+    def find_existing_video(self, video_title: str, video_id: str, audio_only: bool = False) -> Optional[str]:
         """
-        Kiểm tra xem video đã được tải trước đó chưa
+        Kiểm tra xem video hoặc audio đã được tải trước đó chưa
         
         Args:
-            video_title: Tên video
-            video_id: ID video (từ YouTube/Facebook)
+            video_title: Tên video/audio
+            video_id: ID video/audio
+            audio_only: Chỉ kiểm tra định dạng audio
             
         Returns:
             Đường dẫn file nếu tìm thấy, None nếu chưa tải
@@ -82,7 +83,8 @@ class DownloaderCore:
         safe_filename = self.clean_filename(video_title)
         
         # Kiểm tra các định dạng phổ biến
-        for ext in ['mp4', 'mkv', 'webm', 'flv', 'avi']:
+        extensions = ['mp3', 'm4a', 'webm', 'ogg', 'wav'] if audio_only else ['mp4', 'mkv', 'webm', 'flv', 'avi']
+        for ext in extensions:
             # Kiểm tra theo tên đã làm sạch
             final_file = os.path.join(self.output_path, f"{safe_filename}.{ext}")
             if os.path.exists(final_file):
@@ -95,12 +97,13 @@ class DownloaderCore:
         
         return None
     
-    def download(self, url: str) -> bool:
+    def download(self, url: str, audio_only: bool = False) -> bool:
         """
-        Tải video từ URL
+        Tải video hoặc audio từ URL
         
         Args:
             url: URL video
+            audio_only: Chỉ tải âm thanh
             
         Returns:
             True nếu tải thành công, False nếu lỗi
@@ -127,9 +130,9 @@ class DownloaderCore:
                     video_title = info.get('title', 'unknown_title')
                     
                     # Kiểm tra xem file đã tồn tại chưa
-                    existing_file = self.find_existing_video(video_title, video_id)
+                    existing_file = self.find_existing_video(video_title, video_id, audio_only)
                     if existing_file:
-                        self.log(f"✅ Video đã tồn tại, bỏ qua download: {existing_file}")
+                        self.log(f"✅ Video/Audio đã tồn tại, bỏ qua download: {existing_file}")
                         return True
             except Exception as e:
                 self.log(f"⚠️ Không thể lấy thông tin video, tiếp tục download...")
@@ -157,25 +160,63 @@ class DownloaderCore:
                 'logger': self._yt_dlp_logger(),
             }
 
-            if ffmpeg_path:
-                # Nếu tìm thấy ffmpeg, chỉ định vị trí cho yt-dlp (nếu dùng đường dẫn tuyệt đối)
-                if os.path.isabs(ffmpeg_path):
-                    ydl_opts['ffmpeg_location'] = ffmpeg_path
-                
-                # Ưu tiên 1080p > 720p > 480p có merge
-                ydl_opts['format'] = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestvideo[height<=720]+bestaudio/best[height<=720]/best'
-                ydl_opts['merge_output_format'] = 'mp4'
+            if ffmpeg_path and os.path.isabs(ffmpeg_path):
+                ydl_opts['ffmpeg_location'] = ffmpeg_path
+
+            if audio_only:
+                ydl_opts['format'] = 'bestaudio/best'
+                if ffmpeg_path:
+                    ydl_opts['postprocessors'] = [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '192',
+                    }]
+                else:
+                    self.log("⚠️ Không tìm thấy ffmpeg. Âm thanh sẽ được tải ở định dạng gốc (m4a/webm).")
             else:
-                self.log("⚠️ Không tìm thấy ffmpeg. Chất lượng video sẽ bị giới hạn (tối đa 720p) vì không thể trộn video và âm thanh.")
-                self.log("💡 Bạn có thể bỏ 'ffmpeg.exe' vào thư mục 'bin' trong thư mục dự án để tăng chất lượng lên 1080p+.")
-                # Nếu không có ffmpeg, chỉ tải file đã có sẵn video+audio (thường tối đa 720p cho mp4)
-                ydl_opts['format'] = 'best[ext=mp4]/best'
+                if ffmpeg_path:
+                    # Ưu tiên 1080p > 720p > 480p có merge
+                    ydl_opts['format'] = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestvideo[height<=720]+bestaudio/best[height<=720]/best'
+                    ydl_opts['merge_output_format'] = 'mp4'
+                else:
+                    self.log("⚠️ Không tìm thấy ffmpeg. Chất lượng video sẽ bị giới hạn (tối đa 720p) vì không thể trộn video và âm thanh.")
+                    self.log("💡 Bạn có thể bỏ 'ffmpeg.exe' vào thư mục 'bin' trong thư mục dự án để tăng chất lượng lên 1080p+.")
+                    # Nếu không có ffmpeg, chỉ tải file đã có sẵn video+audio (thường tối đa 720p cho mp4)
+                    ydl_opts['format'] = 'best[ext=mp4]/best'
             
             self.log(f"🔄 Đang tải: {url}")
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                
+            # Khởi động tải xuống
+            download_success = False
+            info = None
+            
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    download_success = True
+            except yt_dlp.utils.DownloadError as e:
+                error_msg = str(e)
+                if 'HTTP Error 403' in error_msg:
+                    self.log(f"⚠️ 403 Forbidden detected. Retrying with browser cookies (Chrome)...")
+                    cookie_opts = ydl_opts.copy()
+                    cookie_opts['cookiesfrombrowser'] = ('chrome', )
+                    try:
+                        with yt_dlp.YoutubeDL(cookie_opts) as ydl:
+                            info = ydl.extract_info(url, download=True)
+                            download_success = True
+                    except Exception as cookie_e:
+                        self.log(f"❌ Failed even with cookies: {str(cookie_e)[:100]}")
+                        return False
+                else:
+                    if 'This video is not available' in error_msg:
+                        self.log(f"⚠️ Video không khả dụng hoặc bị xóa")
+                    elif 'Signature extraction failed' in error_msg:
+                        self.log(f"⚠️ Lỗi xác thực")
+                    else:
+                        self.log(f"❌ Lỗi tải video: {error_msg[:100]}")
+                    return False
+            
+            if download_success and info:
                 video_id = info.get('id', 'unknown')
                 video_ext = info.get('ext', 'mp4')
                 video_title = info.get('title', 'unknown_title')
@@ -183,59 +224,32 @@ class DownloaderCore:
                 # Làm sạch tên file
                 safe_filename = self.clean_filename(video_title)
                 
-                # Tệp tạm được tải xuống với tên ID
+                # Tìm tệp thực tế được tải xuống (đề phòng postprocessor đổi ext sang mp3)
+                actual_ext = video_ext
                 temp_file = os.path.join(self.output_path, f"{video_id}.{video_ext}")
+                for ext in ['mp3', 'm4a', 'webm', 'ogg', 'wav', 'mp4', video_ext]:
+                    check_path = os.path.join(self.output_path, f"{video_id}.{ext}")
+                    if os.path.exists(check_path):
+                        temp_file = check_path
+                        actual_ext = ext
+                        break
                 
                 # Tên file cuối cùng
-                final_file = os.path.join(self.output_path, f"{safe_filename}.{video_ext}")
+                final_file = os.path.join(self.output_path, f"{safe_filename}.{actual_ext}")
                 
                 # Đổi tên file
                 if os.path.exists(temp_file):
                     if os.path.exists(final_file):
                         final_file = os.path.join(
                             self.output_path, 
-                            f"{safe_filename}_{datetime.now().strftime('%H%M%S')}.{video_ext}"
+                            f"{safe_filename}_{datetime.now().strftime('%H%M%S')}.{actual_ext}"
                         )
                     os.rename(temp_file, final_file)
                 
                 self.log(f"✅ Tải thành công: {final_file}")
                 return True
-        
-        except yt_dlp.utils.DownloadError as e:
-            error_msg = str(e)
             
-            # If we hit a 403 Forbidden, try using cookies from browser
-            if 'HTTP Error 403' in error_msg:
-                self.log(f"⚠️ 403 Forbidden detected. Retrying with browser cookies (Chrome)...")
-                cookie_opts = ydl_opts.copy()
-                cookie_opts['cookiesfrombrowser'] = ('chrome', )
-                try:
-                    with yt_dlp.YoutubeDL(cookie_opts) as ydl:
-                        info = ydl.extract_info(url, download=True)
-                        
-                        # Process the result similar to the main block (simplified for retry)
-                        # Note: The retry block focuses on getting the file downloaded.
-                        # Naming logic might differ slightly if not fully duplicated, 
-                        # but yt-dlp handles the download.
-                        # We can try to reuse the success logic if needed, but for now 
-                        # let's assume if extract_info succeeds, we are good.
-                        
-                        # We need to manually construct the final filename to return True/path if possible
-                        # but returning True is sufficient for now based on current logic.
-                        self.log(f"✅ Downloaded with cookies successfully.")
-                        return True
-                except Exception as cookie_e:
-                    self.log(f"❌ Failed even with cookies: {str(cookie_e)[:100]}")
-                    # Fall through to return False or raise if needed, but original code returns False
-            
-            elif 'This video is not available' in error_msg:
-                self.log(f"⚠️ Video không khả dụng hoặc bị xóa")
-            elif 'Signature extraction failed' in error_msg:
-                self.log(f"⚠️ Lỗi xác thực")
-            else:
-                self.log(f"❌ Lỗi tải video: {error_msg[:100]}")
             return False
-        
         except Exception as e:
             self.log(f"⚠️ Lỗi không xác định: {str(e)[:100]}")
             return False

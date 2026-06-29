@@ -29,6 +29,7 @@ def build_exe():
         '--name=everything_downloader',
         '--onefile',
         '--windowed',
+        '--splash=' + os.path.join(script_dir, 'splash.png'),
         '--add-data=' + os.path.join(script_dir, 'downloader_core.py') + ';.',
         '--add-data=' + os.path.join(script_dir, 'gui.py') + ';.',
         '--add-data=' + os.path.join(script_dir, 'bin') + ';bin',

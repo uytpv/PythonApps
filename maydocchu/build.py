@@ -15,6 +15,7 @@ def build_exe():
         "--windowed",          # Không hiện cửa sổ console khi chạy
         f"--name={app_name}",  # Tên file exe
         "--clean",             # Dọn dẹp cache trước khi build
+        "--add-data=scripts.json;.", # Thêm scripts.json vào thư mục tạm của exe
         # Thêm các icon nếu có
         # "--icon=app_icon.ico" 
     ]

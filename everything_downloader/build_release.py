@@ -80,6 +80,7 @@ def build_exe():
         '--name=everything_downloader',
         '--onefile',
         '--windowed',
+        '--splash=' + os.path.join(script_dir, 'splash.png'),
         '--collect-all=PyQt6',
         '--collect-all=yt_dlp',
         '--noconfirm',

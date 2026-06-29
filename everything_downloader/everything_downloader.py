@@ -10,7 +10,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PyQt6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
-from gui import DownloaderGUI
 
 class SplashCloseSignal(QObject):
     """Signal để đóng splash screen"""
@@ -108,28 +107,62 @@ class SplashScreen(QWidget):
         """Dừng spinner"""
         self.spinner_timer.stop()
 
+# For compatibility/testing: create_splash_screen
 def main():
     """Hàm main"""
     app = QApplication(sys.argv)
     
-    # Tạo splash screen và hiển thị
-    splash = SplashScreen()
-    splash.show()
-    
-    # Tạo main window nhưng chưa hiển thị
-    main_window = DownloaderGUI()
-    
-    # Timer để đóng splash screen và hiển thị main window sau 1 giây
-    def show_main():
-        splash.stop_spinner()
-        splash.close()
+    # Kiểm tra xem có đang chạy dưới dạng file exe đóng gói có splash screen không
+    is_packaged = False
+    try:
+        import pyi_splash
+        is_packaged = True
+    except ImportError:
+        pass
+        
+    if is_packaged:
+        # Nếu chạy exe có splash screen, hiển thị trực tiếp main window khi nạp xong
+        # Tránh hiển thị 2 cái splash screens cùng lúc
+        from gui import DownloaderGUI
+        main_window = DownloaderGUI()
+        
+        # Đóng splash của PyInstaller
+        try:
+            import pyi_splash
+            pyi_splash.close()
+        except ImportError:
+            pass
+            
         main_window.show()
-    
-    timer = QTimer()
-    timer.timeout.connect(show_main)
-    timer.setSingleShot(True)  # Chỉ chạy một lần
-    timer.start(1500)  # 1.5 giây sau
-    
+    else:
+        # Nếu chạy dạng script, hiển thị SplashScreen của PyQt6 như bình thường
+        splash = SplashScreen()
+        splash.show()
+        app.processEvents()
+        
+        main_window = None
+        
+        def show_main():
+            nonlocal main_window
+            splash.status_label.setText("Đang tải các thư viện...")
+            app.processEvents()
+            
+            from gui import DownloaderGUI
+            
+            splash.status_label.setText("Đang khởi tạo giao diện...")
+            app.processEvents()
+            
+            main_window = DownloaderGUI()
+            splash.stop_spinner()
+            splash.close()
+            main_window.show()
+            
+        # Sử dụng timer ngắn để event loop của splash screen bắt đầu chạy trước khi load gui
+        timer = QTimer()
+        timer.timeout.connect(show_main)
+        timer.setSingleShot(True)
+        timer.start(500)  # 500ms
+        
     sys.exit(app.exec())
 
 if __name__ == '__main__':

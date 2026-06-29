@@ -1,9 +1,48 @@
 import json
 import os
+import sys
+import shutil
 
 class Storage:
     def __init__(self, filename="scripts.json"):
-        self.filename = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), filename)
+        # 1. Xác định đường dẫn file mặc định đi kèm (bundled)
+        default_bundled_path = None
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            # Nếu chạy từ exe của PyInstaller, file đi kèm được giải nén vào thư mục tạm _MEIPASS
+            default_bundled_path = os.path.join(sys._MEIPASS, filename)
+        else:
+            # Nếu chạy từ mã nguồn Python
+            default_bundled_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), filename)
+
+        # 2. Xác định thư mục lưu trữ ngoài (persistent)
+        if getattr(sys, 'frozen', False):
+            # Lưu cùng thư mục với file .exe (để người dùng dễ quản lý, copy)
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # Lưu ở thư mục gốc của dự án khi chạy dev
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
+        # 3. Kiểm tra xem thư mục có quyền ghi hay không (ví dụ: chạy trong C:\Program Files)
+        try:
+            test_file = os.path.join(base_dir, '.write_test')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+        except (IOError, OSError):
+            # Nếu không có quyền ghi, fallback về AppData/Roaming/MayDocChu
+            appdata_dir = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'MayDocChu')
+            os.makedirs(appdata_dir, exist_ok=True)
+            base_dir = appdata_dir
+
+        self.filename = os.path.join(base_dir, filename)
+
+        # 4. Sao chép file kịch bản mặc định sang nơi lưu trữ ngoài nếu chưa tồn tại
+        if not os.path.exists(self.filename) and default_bundled_path and os.path.exists(default_bundled_path):
+            try:
+                shutil.copy2(default_bundled_path, self.filename)
+            except Exception as e:
+                print(f"Error copying default scripts: {e}")
+
         self.scripts = self._load_scripts()
 
     def _load_scripts(self):

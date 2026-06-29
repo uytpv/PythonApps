@@ -4,10 +4,10 @@ import threading
 import time
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QTextEdit, QLabel, QLineEdit, QScrollArea, QCheckBox
+    QPushButton, QTextEdit, QTextBrowser, QLabel, QLineEdit, QScrollArea, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer, QThread
-from PyQt6.QtGui import QFont, QColor, QTextCursor
+from PyQt6.QtGui import QFont, QColor, QTextCursor, QTextCharFormat
 from datetime import datetime
 from downloader_core import DownloaderCore
 from ganjingworld_uploader import GanjingworldUploader
@@ -117,6 +117,11 @@ class DownloaderGUI(QMainWindow):
         input_layout.addWidget(self.download_btn)
         main_layout.addLayout(input_layout)
         
+        # Checkbox chỉ tải file audio
+        self.audio_only_checkbox = QCheckBox("🎵 Chỉ tải file âm thanh (Audio Only)")
+        self.audio_only_checkbox.setStyleSheet("font-size: 10pt; padding: 5px;")
+        main_layout.addWidget(self.audio_only_checkbox)
+        
         # ===== PHẦN 2: GANJINGWORLD UPLOAD CONTROLS =====
         gjw_label = QLabel("☁️ Ganjingworld Upload (Tùy chọn):")
         gjw_label.setFont(title_font)
@@ -127,6 +132,9 @@ class DownloaderGUI(QMainWindow):
         self.gjw_checkbox.setStyleSheet("font-size: 10pt; padding: 5px;")
         self.gjw_checkbox.stateChanged.connect(self.on_gjw_checkbox_changed)
         main_layout.addWidget(self.gjw_checkbox)
+        
+        # Kết nối sự kiện checkbox chỉ tải audio
+        self.audio_only_checkbox.stateChanged.connect(self.on_audio_only_changed)
         
         # Access Token input
         token_layout = QHBoxLayout()
@@ -168,13 +176,15 @@ class DownloaderGUI(QMainWindow):
         log_label.setFont(title_font)
         main_layout.addWidget(log_label)
         
-        # Log text area
-        self.log_text = QTextEdit()
+        # Log text area (sử dụng QTextBrowser để click được link)
+        self.log_text = QTextBrowser()
         self.log_text.setReadOnly(True)
+        self.log_text.setOpenLinks(False)
+        self.log_text.anchorClicked.connect(self.on_link_clicked)
         self.log_text.setMinimumHeight(300)
-        self.log_text.setFont(QFont("Courier", 9))
+        self.log_text.setFont(QFont("Courier", 14))
         self.log_text.setStyleSheet("""
-            QTextEdit {
+            QTextBrowser {
                 background-color: #1e1e1e;
                 color: #00ff00;
                 border: 1px solid #333333;
@@ -190,6 +200,28 @@ class DownloaderGUI(QMainWindow):
         self.status_label = QLabel("✅ Sẵn sàng")
         self.status_label.setStyleSheet("color: green; font-weight: bold;")
         info_layout.addWidget(self.status_label)
+        
+        # Nút mở thư mục
+        self.open_folder_btn = QPushButton("📂 Mở thư mục")
+        self.open_folder_btn.setMinimumHeight(30)
+        self.open_folder_btn.clicked.connect(self.on_open_folder_click)
+        self.open_folder_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                border-radius: 4px;
+                padding: 0 10px;
+                font-size: 9pt;
+            }
+            QPushButton:hover {
+                background-color: #0b7dda;
+            }
+            QPushButton:pressed {
+                background-color: #0a6cbd;
+            }
+        """)
+        info_layout.addWidget(self.open_folder_btn)
         
         info_layout.addStretch()
         
@@ -220,14 +252,39 @@ class DownloaderGUI(QMainWindow):
         
         self.log_text.append(formatted_message)
         
-        # Scroll xuống dưới cùng
+        # Scroll xuống dưới cùng và reset định dạng để không bị dính link/format cũ
         cursor = self.log_text.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.setCharFormat(QTextCharFormat())
         self.log_text.setTextCursor(cursor)
     
     def update_spinner(self, frame_text: str):
         """Cập nhật loading spinner (called from signal)"""
         self.status_label.setText(frame_text)
+        
+    def on_link_clicked(self, url):
+        """Xử lý click vào link trong log"""
+        if url.toString() == 'open_folder':
+            self.on_open_folder_click()
+            
+    def on_open_folder_click(self):
+        """Mở thư mục chứa file và chọn file đó"""
+        folder = self.get_videos_folder()
+        if self.last_downloaded_file and os.path.exists(self.last_downloaded_file):
+            if sys.platform == 'win32':
+                import subprocess
+                subprocess.run(['explorer', '/select,', os.path.normpath(self.last_downloaded_file)])
+            else:
+                os.startfile(folder) if hasattr(os, 'startfile') else subprocess.run(['open', folder])
+        else:
+            if os.path.exists(folder):
+                if sys.platform == 'win32':
+                    os.startfile(folder)
+                else:
+                    import subprocess
+                    subprocess.run(['open', folder])
+            else:
+                self.append_log("❌ Thư mục videos chưa được tạo")
     
     def run_spinner(self):
         """Chạy spinner animation trong thread riêng"""
@@ -264,6 +321,16 @@ class DownloaderGUI(QMainWindow):
             self.append_log("✅ Ganjingworld upload được kích hoạt")
         else:
             self.append_log("⏹️ Ganjingworld upload bị vô hiệu hóa")
+            
+    def on_audio_only_changed(self, state):
+        """Xử lý khi checkbox chỉ tải audio thay đổi trạng thái"""
+        is_audio = self.audio_only_checkbox.isChecked()
+        if is_audio:
+            self.gjw_checkbox.setChecked(False)
+            self.gjw_checkbox.setEnabled(False)
+            self.append_log("ℹ️ Đã vô hiệu hóa Ganjingworld Upload vì Ganjingworld chỉ hỗ trợ video")
+        else:
+            self.gjw_checkbox.setEnabled(True)
     
     def on_download_click(self):
         """Xử lý khi click nút Download"""
@@ -281,6 +348,7 @@ class DownloaderGUI(QMainWindow):
         self.is_downloading = True
         self.download_btn.setEnabled(False)
         self.url_input.setEnabled(False)
+        self.audio_only_checkbox.setEnabled(False)
         
         # Bắt đầu loading spinner (sẽ chạy trong thread riêng)
         self.status_label.setText("⠋ Đang tải...")
@@ -297,33 +365,41 @@ class DownloaderGUI(QMainWindow):
         spinner_thread.daemon = True
         spinner_thread.start()
         
-        download_thread = threading.Thread(target=self.download_video, args=(url,))
+        audio_only = self.audio_only_checkbox.isChecked()
+        download_thread = threading.Thread(target=self.download_video, args=(url, audio_only))
         download_thread.daemon = True
         download_thread.start()
     
-    def download_video(self, url: str):
-        """Tải video (chạy trong thread)"""
+    def download_video(self, url: str, audio_only: bool = False):
+        """Tải video hoặc audio (chạy trong thread)"""
         try:
-            success = self.downloader.download(url)
+            success = self.downloader.download(url, audio_only=audio_only)
             
             if success:
-                self.append_log(f"✨ Tải hoàn tất!")
+                self.emit_log(f"✨ Tải hoàn tất!")
                 
                 # Lấy file vừa tải
                 videos_folder = self.get_videos_folder()
                 if os.path.exists(videos_folder):
                     files = sorted(
-                        [f for f in os.listdir(videos_folder) if f.endswith('.mp4')],
+                        [f for f in os.listdir(videos_folder) if os.path.isfile(os.path.join(videos_folder, f)) and not f.endswith(('.part', '.ytdl', '.temp'))],
                         key=lambda x: os.path.getctime(os.path.join(videos_folder, x)),
                         reverse=True
                     )
                     if files:
                         self.last_downloaded_file = os.path.join(videos_folder, files[0])
+                        self.emit_log(f"📂 Đã lưu tại: {files[0]}")
+                
+                # Hiển thị liên kết mở thư mục
+                self.emit_log("<a href='open_folder' style='color: #2196F3; font-weight: bold;'>👉 Click vào đây để mở thư mục chứa file vừa tải</a>")
                 
                 # Kiểm tra nếu cần upload lên GJW
-                if self.gjw_checkbox.isChecked():
+                if self.gjw_checkbox.isChecked() and not audio_only:
                     self.upload_to_ganjingworld()
                 else:
+                    if self.gjw_checkbox.isChecked() and audio_only:
+                        self.emit_log("ℹ️ Bỏ qua tự động upload lên Ganjingworld vì đây là file âm thanh (Audio Only).")
+                    
                     self.url_input.clear()
                     self.status_label.setText("✅ Tải thành công")
                     self.status_label.setStyleSheet("color: green; font-weight: bold;")
@@ -334,7 +410,7 @@ class DownloaderGUI(QMainWindow):
                 self.spinner_running = False
         
         except Exception as e:
-            self.append_log(f"❌ Lỗi không xác định: {str(e)}")
+            self.emit_log(f"❌ Lỗi không xác định: {str(e)}")
             self.status_label.setText("❌ Tải thất bại")
             self.status_label.setStyleSheet("color: red; font-weight: bold;")
             self.spinner_running = False
@@ -343,6 +419,7 @@ class DownloaderGUI(QMainWindow):
             self.is_downloading = False
             self.download_btn.setEnabled(True)
             self.url_input.setEnabled(True)
+            self.audio_only_checkbox.setEnabled(True)
     
     def upload_to_ganjingworld(self):
         """Upload video lên Ganjingworld"""
